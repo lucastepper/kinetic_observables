@@ -1,0 +1,14 @@
+[package]
+authors = ["lucastepper <lucas.tepper.91@gmail.com>"]
+name = "kin_obs"
+version = "0.1.0"
+description = "Compute kinetic observalbes from time series data."
+readme = "Readme.md"
+edition = "2021"
+
+[dependencies]
+pyo3 = { version = "0.16.5", features = ["extension-module"] }
+
+[lib]
+name = "kin_obs"
+crate-type = ["cdylib"]
