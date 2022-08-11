@@ -109,15 +109,35 @@ impl PassageTimes {
         ))
     }
 
-    fn add_data<'py>(&mut self, trajs: &'py np::PyArray2<f64>) -> PyResult<()> {
-        let trajs = unsafe { trajs.as_array() };
-        // compute results in parallel over trajs
+    fn add_data<'py>(&mut self, trajs: &'py np::PyArrayDyn<f64>) -> PyResult<()> {
+        if !trajs.is_c_contiguous() {
+            return Err(PyErr::new::<py::exceptions::PyValueError, _>(
+                "trajs must be c-contiguous",
+            ));
+        }
+        let mut trajs = unsafe { trajs.as_array_mut() };
         let mut results = Vec::new();
-        trajs
-            .axis_iter(nd::Axis(0))
-            .into_par_iter()
-            .map(|row| get_fpts(row, &self.starts, &self.ends, self.dt))
-            .collect_into_vec(&mut results);
+        if trajs.shape().len() == 1 {
+            // compute results in serial if there is only one trajectory
+            let traj =
+                nd::ArrayView1::from_shape(trajs.len(), trajs.as_slice_mut().unwrap()).unwrap();
+            results.push(get_fpts(traj, &self.starts, &self.ends, self.dt));
+        } else if trajs.shape().len() == 2 {
+            // compute results in parallel over trajs
+            trajs
+                .axis_iter(nd::Axis(0))
+                .into_par_iter()
+                .map(|row| {
+                    let traj =
+                        nd::ArrayView1::from_shape(row.len(), row.as_slice().unwrap()).unwrap();
+                    get_fpts(traj, &self.starts, &self.ends, self.dt)
+                })
+                .collect_into_vec(&mut results);
+        } else {
+            return Err(PyErr::new::<py::exceptions::PyValueError, _>(
+                "trajs must have ndims == 1 or 2",
+            ));
+        }
         // add results
         for (sum, counter) in &results {
             self.fpts_sum += sum;
