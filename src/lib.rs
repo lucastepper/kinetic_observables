@@ -1,17 +1,16 @@
-use pyo3::prelude::*;
-use pyo3 as py;
 use ndarray as nd;
+use ndarray::parallel::prelude::*;
 use numpy as np;
 use numpy::IntoPyArray;
-use ndarray::parallel::prelude::*;
-
+use pyo3 as py;
+use pyo3::prelude::*;
 
 fn is_transition(x1: f64, x2: f64, barrier: f64) -> bool {
     if x1 <= barrier && x2 > barrier {
-        return true
+        return true;
     }
     if x1 > barrier && x2 <= barrier {
-        return true
+        return true;
     }
     false
 }
@@ -19,7 +18,7 @@ fn is_transition(x1: f64, x2: f64, barrier: f64) -> bool {
 fn get_fpt_single(traj: nd::ArrayView1<f64>, start: f64, end: f64) -> (f64, usize) {
     let mut count = 0;
     let mut fpt_sum = 0.;
-    let mut end_found= usize::MAX;
+    let mut end_found = usize::MAX;
     // iterate through from end, add all diffs from end found
     // to every start found, update end when found
     for mut i in 1..traj.len() {
@@ -35,7 +34,12 @@ fn get_fpt_single(traj: nd::ArrayView1<f64>, start: f64, end: f64) -> (f64, usiz
     (fpt_sum, count)
 }
 
-fn get_fpts(traj: nd::ArrayView1<f64>, starts: &nd::Array1<f64>, ends: &nd::Array1<f64>, dt: f64) -> (nd::Array2<f64>, nd::Array2<usize>) {
+fn get_fpts(
+    traj: nd::ArrayView1<f64>,
+    starts: &nd::Array1<f64>,
+    ends: &nd::Array1<f64>,
+    dt: f64,
+) -> (nd::Array2<f64>, nd::Array2<usize>) {
     let mut fpts_sum: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
     let mut counter: nd::Array2<usize> = nd::Array2::zeros((starts.len(), ends.len()));
     for i in 0..starts.len() {
@@ -56,7 +60,7 @@ fn extract_list_array(to_extract: &PyAny, name: &str) -> nd::Array1<f64> {
         "ndarray" => {
             let array = to_extract.extract::<&np::PyArray1<f64>>().unwrap();
             unsafe { array.as_array().to_owned() }
-        },
+        }
         _ => panic!("{} must be a list or ndarray", name),
     }
 }
@@ -73,7 +77,7 @@ struct PassageTimes {
 #[pymethods]
 impl PassageTimes {
     #[new]
-    fn new<'py> (starts: &'py py::types::PyAny, ends: &'py py::types::PyAny, dt: f64) -> Self {
+    fn new<'py>(starts: &'py py::types::PyAny, ends: &'py py::types::PyAny, dt: f64) -> Self {
         let starts = extract_list_array(starts, "starts");
         let ends = extract_list_array(ends, "ends");
         let fpts_sum: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
@@ -88,18 +92,29 @@ impl PassageTimes {
     }
 
     fn __str__(&self) -> PyResult<String> {
-        Ok(format!("PassageTimes(dt={}, starts={}, ends={})", &self.dt, &self.starts, &self.ends))
+        Ok(format!(
+            "PassageTimes(dt={}, starts={}, ends={})",
+            &self.dt, &self.starts, &self.ends
+        ))
     }
 
     fn __repr__(&self) -> PyResult<String> {
-        Ok(format!("PassageTimes(dt={}, starts={}, ends={})", &self.dt, &self.starts, &self.ends))
+        Ok(format!(
+            "PassageTimes(dt={}, starts={}, ends={}, fpts_sum={:?}, fpts_counter={:?})",
+            &self.dt,
+            &self.starts,
+            &self.ends,
+            &self.fpts_sum.as_slice().unwrap(),
+            &self.fpts_counter.as_slice().unwrap()
+        ))
     }
 
-    fn add_data<'py> (&mut self, trajs: &'py np::PyArray2<f64>) -> PyResult<()> {
-        let trajs = unsafe{ trajs.as_array() };
+    fn add_data<'py>(&mut self, trajs: &'py np::PyArray2<f64>) -> PyResult<()> {
+        let trajs = unsafe { trajs.as_array() };
         // compute results in parallel over trajs
         let mut results = Vec::new();
-        trajs.axis_iter(nd::Axis(0))
+        trajs
+            .axis_iter(nd::Axis(0))
             .into_par_iter()
             .map(|row| get_fpts(row, &self.starts, &self.ends, self.dt))
             .collect_into_vec(&mut results);
@@ -111,13 +126,11 @@ impl PassageTimes {
         Ok(())
     }
 
-    fn get_result<'py> (&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<f64>> {
+    fn get_result<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<f64>> {
         let result = &self.fpts_sum / self.fpts_counter.mapv(|x| x as f64);
         Ok(result.into_pyarray(py))
     }
-
 }
-
 
 #[pymodule]
 fn kin_obs(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
