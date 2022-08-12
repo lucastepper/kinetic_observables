@@ -65,7 +65,7 @@ fn extract_list_array(to_extract: &PyAny, name: &str) -> nd::Array1<f64> {
     }
 }
 
-#[pyclass]
+#[pyclass(text_signature="(starts, ends, dt)")]
 struct PassageTimes {
     #[pyo3(get, set)]
     dt: f64,
@@ -109,6 +109,8 @@ impl PassageTimes {
         ))
     }
 
+    /// Add data iteratively to the object
+    #[pyo3(text_signature = "($self, trajs)")]
     fn add_data<'py>(&mut self, trajs: &'py np::PyArrayDyn<f64>) -> PyResult<()> {
         if !trajs.is_c_contiguous() {
             return Err(PyErr::new::<py::exceptions::PyValueError, _>(
@@ -146,6 +148,7 @@ impl PassageTimes {
         Ok(())
     }
 
+    #[pyo3(text_signature = "($self)")]
     fn get_result<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<f64>> {
         let result = &self.fpts_sum / self.fpts_counter.mapv(|x| x as f64);
         Ok(result.into_pyarray(py))
