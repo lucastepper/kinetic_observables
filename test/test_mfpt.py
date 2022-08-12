@@ -8,7 +8,12 @@ import kin_obs
 np.random.seed(42)
 DATA = {
     "test_data_1": {
-        "traj": [-1., 0., 1., 2.,],
+        "traj": [
+            -1.0,
+            0.0,
+            1.0,
+            2.0,
+        ],
         "dt": 0.02,
         "starts": [-0.5],
         "ends": [0.5],
@@ -16,7 +21,14 @@ DATA = {
         "ref_mffpt": [[0.02]],
     },
     "test_data_2": {
-        "traj": [[-1., 0., 1., 2.,]],
+        "traj": [
+            [
+                -1.0,
+                0.0,
+                1.0,
+                2.0,
+            ]
+        ],
         "dt": 0.02,
         "starts": [-0.5],
         "ends": [0.5],
@@ -35,7 +47,7 @@ DATA = {
 
 
 def is_transition(x1, x2, barrier):
-    """ Check if two points are in different states. """
+    """Check if two points are in different states."""
     if x1 <= barrier and x2 > barrier:
         return True
     if x1 > barrier and x2 <= barrier:
@@ -44,7 +56,7 @@ def is_transition(x1, x2, barrier):
 
 
 def plot(key):
-    """ Plot trajectory, mark crossings """
+    """Plot trajectory, mark crossings"""
     plot_range = (DATA[key]["traj"].min(), DATA[key]["traj"].max())
     plot_range_len = abs(plot_range[1] - plot_range[0])
     plot_range = (plot_range[0] - plot_range_len / 20, plot_range[1] + plot_range_len / 10)
@@ -58,7 +70,13 @@ def plot(key):
         for j, (x1, x2) in enumerate(zip(DATA[key]["traj"][:-1], DATA[key]["traj"][1:])):
             if is_transition(x1, x2, start):
                 print(f"start_{i + 1} crossing {j + 1}")
-                plt.plot(100 * [(j + 0.5) * DATA[key]["dt"]], np.linspace(*plot_range, 100), linestyle=":", label=label, color=f"C{counter}")
+                plt.plot(
+                    100 * [(j + 0.5) * DATA[key]["dt"]],
+                    np.linspace(*plot_range, 100),
+                    linestyle=":",
+                    label=label,
+                    color=f"C{counter}",
+                )
                 label = None
         if not label:
             counter += 1
@@ -68,7 +86,13 @@ def plot(key):
         for j, (x1, x2) in enumerate(zip(DATA[key]["traj"][:-1], DATA[key]["traj"][1:])):
             if is_transition(x1, x2, end):
                 print(f"end_{i + 1} crossing {j + 1}")
-                plt.plot(100 * [(j + 0.5) * DATA[key]["dt"]], np.linspace(*plot_range, 100), linestyle=":", label=label, color=f"C{counter}")
+                plt.plot(
+                    100 * [(j + 0.5) * DATA[key]["dt"]],
+                    np.linspace(*plot_range, 100),
+                    linestyle=":",
+                    label=label,
+                    color=f"C{counter}",
+                )
                 label = None
         if not label:
             counter += 1
@@ -92,12 +116,12 @@ def test_passage_time(key):
 
 
 def main():
-    """ Test MFPT implementation with very easy data. If PLOT=true in env, plot. """
+    """Test MFPT implementation with very easy data. If PLOT=true in env, plot."""
     for key in DATA:
         test_passage_time(key)
     if os.getenv("PLOT", "false") == "true":
         plot("test_data_3")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
