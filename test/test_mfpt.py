@@ -29,6 +29,7 @@ DATA = {
         "starts": [-0.1],
         "ends": [-0.242],
         "ref_mfpt": [[0.6485714285714286]],
+        "ref_mffpt": [[0.74]],
     },
 }
 
@@ -77,11 +78,17 @@ def plot(key):
 
 @pytest.mark.parametrize("key", DATA.keys())
 def test_passage_time(key):
-    """ Get data from data dict and test mfpt function """
-    passage_times = kin_obs.PassageTimes(DATA[key]["starts"], DATA[key]["ends"], DATA[key]["dt"])
-    passage_times.add_data(np.array(DATA[key]["traj"]))
-    print(passage_times.__repr__())
-    np.testing.assert_allclose(passage_times.get_result(), DATA[key]["ref_mfpt"])
+    """Get data from data dict and test mfpt function"""
+    for method in ["first", "all"]:
+        passage_times = kin_obs.PassageTimes(
+            DATA[key]["starts"], DATA[key]["ends"], DATA[key]["dt"], method
+        )
+        passage_times.add_data(np.array(DATA[key]["traj"]))
+        print(passage_times.__repr__())
+        if method == "first":
+            np.testing.assert_allclose(passage_times.get_result(), DATA[key]["ref_mffpt"])
+        if method == "all":
+            np.testing.assert_allclose(passage_times.get_result(), DATA[key]["ref_mfpt"])
 
 
 def main():

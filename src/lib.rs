@@ -34,22 +34,48 @@ fn get_fpt_single(traj: nd::ArrayView1<f64>, start: f64, end: f64) -> (f64, usiz
     (fpt_sum, count)
 }
 
-fn get_fpts(
+fn get_ffpt_single(traj: nd::ArrayView1<f64>, start: f64, end: f64) -> (f64, usize) {
+    let mut count = 0;
+    let mut ffpt_sum = 0.;
+    let mut start_found = usize::MAX;
+    // iterate through from end, add all diffs from end found
+    // to every start found, update end when found
+    for i in 0..(traj.len() - 1) {
+        if start_found < usize::MAX {
+            if is_transition(traj[i], traj[i + 1], end) {
+                ffpt_sum += (i - start_found) as f64;
+                count += 1;
+                start_found = usize::MAX;
+            }
+        } else {
+            if is_transition(traj[i], traj[i + 1], start) {
+                start_found = i;
+            }
+        }
+    }
+    (ffpt_sum, count)
+}
+
+fn get_passage_times(
     traj: nd::ArrayView1<f64>,
     starts: &nd::Array1<f64>,
     ends: &nd::Array1<f64>,
     dt: f64,
+    method: &PassageTimesMethod,
 ) -> (nd::Array2<f64>, nd::Array2<usize>) {
-    let mut fpts_sum: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
+    let mut passage_times_sum: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
     let mut counter: nd::Array2<usize> = nd::Array2::zeros((starts.len(), ends.len()));
     for i in 0..starts.len() {
         for j in 0..ends.len() {
-            let (fpt_sum, count) = get_fpt_single(traj, starts[i], ends[j]);
-            fpts_sum[(i, j)] += dt * fpt_sum;
+            let (fpt_sum, count) = match method {
+                PassageTimesMethod::First => get_ffpt_single(traj, starts[i], ends[j]),
+                PassageTimesMethod::All => get_fpt_single(traj, starts[i], ends[j]),
+            };
+            passage_times_sum[(i, j)] += dt * fpt_sum;
             counter[(i, j)] += count;
         }
     }
-    (fpts_sum, counter)
+    (passage_times_sum, counter)
 }
 
 // convert PyAny into ndarray if PyAny is List or ndarray
@@ -65,30 +91,52 @@ fn extract_list_array(to_extract: &PyAny, name: &str) -> nd::Array1<f64> {
     }
 }
 
-#[pyclass(text_signature="(starts, ends, dt)")]
+enum PassageTimesMethod {
+    All,
+    First,
+}
+
+#[pyclass(text_signature = "(starts, ends, dt, method)")]
 struct PassageTimes {
     #[pyo3(get, set)]
     dt: f64,
     starts: nd::Array1<f64>,
     ends: nd::Array1<f64>,
-    fpts_sum: nd::Array2<f64>,
-    fpts_counter: nd::Array2<usize>,
+    passage_times_sum: nd::Array2<f64>,
+    passage_times_counter: nd::Array2<usize>,
+    method: PassageTimesMethod,
 }
 #[pymethods]
 impl PassageTimes {
     #[new]
-    fn new<'py>(starts: &'py py::types::PyAny, ends: &'py py::types::PyAny, dt: f64) -> Self {
+    fn new<'py>(
+        starts: &'py py::types::PyAny,
+        ends: &'py py::types::PyAny,
+        dt: f64,
+        method: String,
+    ) -> PyResult<Self> {
         let starts = extract_list_array(starts, "starts");
         let ends = extract_list_array(ends, "ends");
-        let fpts_sum: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
-        let fpts_counter: nd::Array2<usize> = nd::Array2::zeros((starts.len(), ends.len()));
-        PassageTimes {
+        let passage_times_sum: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
+        let passage_times_counter: nd::Array2<usize> =
+            nd::Array2::zeros((starts.len(), ends.len()));
+        let method = match method.as_str() {
+            "all" => PassageTimesMethod::All,
+            "first" => PassageTimesMethod::First,
+            _ => {
+                return Err(PyErr::new::<py::exceptions::PyValueError, _>(
+                    "method must be either 'all' or 'first'",
+                ))
+            }
+        };
+        Ok(PassageTimes {
             dt,
             starts,
             ends,
-            fpts_sum,
-            fpts_counter,
-        }
+            passage_times_sum,
+            passage_times_counter,
+            method,
+        })
     }
 
     fn __str__(&self) -> PyResult<String> {
@@ -100,12 +148,12 @@ impl PassageTimes {
 
     fn __repr__(&self) -> PyResult<String> {
         Ok(format!(
-            "PassageTimes(dt={}, starts={}, ends={}, fpts_sum={:?}, fpts_counter={:?})",
+            "PassageTimes(dt={}, starts={}, ends={}, passage_times_sum={:?}, passage_times_counter={:?})",
             &self.dt,
             &self.starts,
             &self.ends,
-            &self.fpts_sum.as_slice().unwrap(),
-            &self.fpts_counter.as_slice().unwrap()
+            &self.passage_times_sum.as_slice().unwrap(),
+            &self.passage_times_counter.as_slice().unwrap()
         ))
     }
 
@@ -123,7 +171,13 @@ impl PassageTimes {
             // compute results in serial if there is only one trajectory
             let traj =
                 nd::ArrayView1::from_shape(trajs.len(), trajs.as_slice_mut().unwrap()).unwrap();
-            results.push(get_fpts(traj, &self.starts, &self.ends, self.dt));
+            results.push(get_passage_times(
+                traj,
+                &self.starts,
+                &self.ends,
+                self.dt,
+                &self.method,
+            ));
         } else if trajs.shape().len() == 2 {
             // compute results in parallel over trajs
             trajs
@@ -132,7 +186,7 @@ impl PassageTimes {
                 .map(|row| {
                     let traj =
                         nd::ArrayView1::from_shape(row.len(), row.as_slice().unwrap()).unwrap();
-                    get_fpts(traj, &self.starts, &self.ends, self.dt)
+                    get_passage_times(traj, &self.starts, &self.ends, self.dt, &self.method)
                 })
                 .collect_into_vec(&mut results);
         } else {
@@ -142,15 +196,15 @@ impl PassageTimes {
         }
         // add results
         for (sum, counter) in &results {
-            self.fpts_sum += sum;
-            self.fpts_counter += counter;
+            self.passage_times_sum += sum;
+            self.passage_times_counter += counter;
         }
         Ok(())
     }
 
     #[pyo3(text_signature = "($self)")]
     fn get_result<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<f64>> {
-        let result = &self.fpts_sum / self.fpts_counter.mapv(|x| x as f64);
+        let result = &self.passage_times_sum / self.passage_times_counter.mapv(|x| x as f64);
         Ok(result.into_pyarray(py))
     }
 }
