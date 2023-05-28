@@ -52,7 +52,7 @@ def is_transition(x1, x2, barrier):
         return True
     if x1 > barrier and x2 <= barrier:
         return True
-    False
+    return False
 
 
 def plot(key):
