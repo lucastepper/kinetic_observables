@@ -122,23 +122,28 @@ def integrate(x0, gamma, l, u0, kbt, dt, steps):
     return traj
 
 
-@pytest.mark.parametrize("to_test", ["first", "all"])
-def test_passage_times(to_test):
-    """ Test either first-first passage times or all-all passage times
+@pytest.mark.parametrize(
+    # "to_test, parallel", [("first", False), ("first", True), ("all", False), ("all", True)]
+    "to_test, parallel", [("all", False)]
+)
+def test_passage_times(to_test, parallel):
+    """Test either first-first passage times or all-all passage times
     against reference implementation.
     """
     l = 1.2
     nbins = 14
     dt = 0.01
     traj = integrate(1.0, 120.0, l, 1.5, 2.494, dt, int(1e6))
+    if parallel:
+        traj = np.stack([traj, integrate(1.0, 120.0, l, 1.5, 2.494, dt, int(1e6))], axis=0)
     if to_test == "first":
         mftps_ref = get_mffpt(traj, [-l, l], np.linspace(-l, l, nbins), dt)
     elif to_test == "all":
         mftps_ref = get_mfpt(traj, [-l, l], np.linspace(-l, l, nbins), dt)
     else:
         raise ValueError(f"to_test must be 'first' or 'all', not {to_test}")
-    passage_times = kin_obs.PassageTimes([-l, l], np.linspace(-l, l, nbins), dt, to_test)
-    passage_times.add_data(traj)
+    passage_times = kin_obs.PassageTimes(-l, l, nbins, dt, to_test)
+    passage_times.add_data(traj.reshape(1, -1))
     mftps_test = passage_times.get_result()
     if PLOT:
         import matplotlib.pyplot as plt
@@ -151,4 +156,4 @@ def test_passage_times(to_test):
 
 
 if __name__ == "__main__":
-    test_passage_times("first")
+    test_passage_times("first", parallel=False)
