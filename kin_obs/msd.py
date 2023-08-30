@@ -2,12 +2,11 @@ import numpy as np
 from correlation import correlation
 
 
-def msd(traj, dt, trunc=None):
+def msd(traj, trunc=None):
     """Compute the msd of a trajectory.
         Delta x^2(t) = sum_{dims} < (x(0) - x(t))^2 >
     Arguments:
         traj (np.ndarray (steps, dims)): Trajectory
-        dt (float): Time step
         trunc (int): Truncate the msd at this many steps
     Returns:
         msd (np.ndarray (steps)): MSD
@@ -46,4 +45,4 @@ def msd(traj, dt, trunc=None):
         2.0 * sum_traj_sqrd - np.cumsum(sum_traj_sqrd_start) - np.cumsum(sum_traj_sqrd_end[::-1])
     ) / (len(traj) - 1 - np.arange(trunc - 1))
     output[1:] -= 2 * sum_xx_corr[1:]
-    return dt * output
+    return output
