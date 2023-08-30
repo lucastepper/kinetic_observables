@@ -8,12 +8,11 @@ PLOT = False
 
 
 @njit
-def calc_msd_simple(x, dt, trunc=None):
+def calc_msd_simple(x, trunc=None):
     """Compute the msd of a trajectory by direct summation.
         Delta x^2(t) = sum_{dims} < (x(0) - x(t))^2 >
     Arguments:
         traj (np.ndarray (steps, dims)): Trajectory
-        dt (float): Time step
         trunc (int): Truncate the msd at this many steps
     Returns:
         msd (np.ndarray (steps)): MSD
@@ -28,19 +27,18 @@ def calc_msd_simple(x, dt, trunc=None):
             x2 += (x[i + s] - x[i]) ** 2
         x2 /= n - s
         msd[s] = x2
-    return dt * msd
+    return msd
 
 
 @pytest.mark.parametrize("ndim", [1, 2])
 def test_msd(ndim):
     """Test the msd vs a reference implementation."""
-    dt = 0.021
     trunc = 800
     test_traj = np.cumsum(np.random.normal(size=(int(1e3), ndim), scale=0.01), axis=0)
     # when computing the msd for multiple dimensions, we need to sum over the dimensions
-    msd_ref = np.sum([calc_msd_simple(test_traj[:, i], dt, trunc) for i in range(ndim)], axis=0)
+    msd_ref = np.sum([calc_msd_simple(test_traj[:, i], trunc) for i in range(ndim)], axis=1)
     # pylint: disable=too-many-function-args
-    msd_test = kin_obs.msd(test_traj, dt, trunc)
+    msd_test = kin_obs.msd(test_traj, trunc)
     if PLOT:
         import matplotlib.pyplot as plt
 
