@@ -16,6 +16,7 @@ def msd(traj, trunc=None):
         trunc = len(traj)
     if traj.ndim == 1:
         traj = traj.reshape((-1, 1))
+    trunc = min(len(traj), trunc)
     output = np.zeros(trunc, dtype=float)
     sum_xx_corr = np.sum(
         [correlation(traj[:, i], traj[:, i], trunc=trunc) for i in range(traj.shape[1])], axis=0
