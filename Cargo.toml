@@ -10,6 +10,7 @@ edition = "2021"
 ndarray = { version = "0.15.4", features = ["rayon"] }
 numpy = "0.16.2"
 pyo3 = { version = "0.16.5", features = ["extension-module"] }
+rayon = "1.8.1"
 
 [lib]
 name = "kin_obs"

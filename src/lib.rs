@@ -4,6 +4,7 @@ use numpy as np;
 use numpy::IntoPyArray;
 use pyo3 as py;
 use pyo3::prelude::*;
+use rayon;
 
 fn is_transition(x1: f64, x2: f64, barrier: f64) -> bool {
     if x1 <= barrier && x2 > barrier {
@@ -158,8 +159,14 @@ impl PassageTimes {
     }
 
     /// Add data iteratively to the object
-    #[pyo3(text_signature = "($self, trajs)")]
-    fn add_data<'py>(&mut self, trajs: &'py np::PyArrayDyn<f64>) -> PyResult<()> {
+    #[pyo3(text_signature = "($self, trajs, nthreads)")]
+    #[args(nthreads = "1")]
+    fn add_data<'py>(&mut self, trajs: &'py np::PyArrayDyn<f64>, nthreads: usize) -> PyResult<()> {
+        // construct rayon thread pool with n
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(nthreads)
+            .build()
+            .unwrap();
         if !trajs.is_c_contiguous() {
             return Err(PyErr::new::<py::exceptions::PyValueError, _>(
                 "trajs must be c-contiguous",
@@ -180,15 +187,17 @@ impl PassageTimes {
             ));
         } else if trajs.shape().len() == 2 {
             // compute results in parallel over trajs
-            trajs
-                .axis_iter(nd::Axis(0))
-                .into_par_iter()
-                .map(|row| {
-                    let traj =
-                        nd::ArrayView1::from_shape(row.len(), row.as_slice().unwrap()).unwrap();
-                    get_passage_times(traj, &self.starts, &self.ends, self.dt, &self.method)
-                })
-                .collect_into_vec(&mut results);
+            pool.install(|| {
+                trajs
+                    .axis_iter(nd::Axis(0))
+                    .into_par_iter()
+                    .map(|row| {
+                        let traj =
+                            nd::ArrayView1::from_shape(row.len(), row.as_slice().unwrap()).unwrap();
+                        get_passage_times(traj, &self.starts, &self.ends, self.dt, &self.method)
+                    })
+                    .collect_into_vec(&mut results);
+            });
         } else {
             return Err(PyErr::new::<py::exceptions::PyValueError, _>(
                 "trajs must have ndims == 1 or 2",
