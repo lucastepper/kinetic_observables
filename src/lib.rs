@@ -1,7 +1,7 @@
 use ndarray as nd;
 use ndarray::parallel::prelude::*;
 use numpy as np;
-use numpy::IntoPyArray;
+use numpy::{IntoPyArray,ToPyArray};
 use pyo3 as py;
 use pyo3::prelude::*;
 use rayon;
@@ -209,6 +209,16 @@ impl PassageTimes {
             self.passage_times_counter += counter;
         }
         Ok(())
+    }
+
+    #[getter]
+    fn passage_times_sum<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<f64>> {
+        Ok(self.passage_times_sum.to_pyarray(py))
+    }
+
+    #[getter]
+    fn passage_times_counter<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<usize>> {
+        Ok(self.passage_times_counter.to_pyarray(py))
     }
 
     #[pyo3(text_signature = "($self)")]
