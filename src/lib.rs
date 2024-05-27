@@ -64,7 +64,7 @@ fn get_passage_times(
     dt: f64,
     method: &PassageTimesMethod,
 ) -> (nd::Array2<f64>, nd::Array2<usize>) {
-    let mut passage_times_sum: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
+    let mut sums: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
     let mut counter: nd::Array2<usize> = nd::Array2::zeros((starts.len(), ends.len()));
     for i in 0..starts.len() {
         for j in 0..ends.len() {
@@ -72,11 +72,11 @@ fn get_passage_times(
                 PassageTimesMethod::First => get_ffpt_single(traj, starts[i], ends[j]),
                 PassageTimesMethod::All => get_fpt_single(traj, starts[i], ends[j]),
             };
-            passage_times_sum[(i, j)] += dt * fpt_sum;
+            sums[(i, j)] += dt * fpt_sum;
             counter[(i, j)] += count;
         }
     }
-    (passage_times_sum, counter)
+    (sums, counter)
 }
 
 // convert PyAny into ndarray if PyAny is List or ndarray
@@ -103,8 +103,8 @@ struct PassageTimes {
     dt: f64,
     starts: nd::Array1<f64>,
     ends: nd::Array1<f64>,
-    passage_times_sum: nd::Array2<f64>,
-    passage_times_counter: nd::Array2<usize>,
+    sums: nd::Array2<f64>,
+    counters: nd::Array2<usize>,
     method: PassageTimesMethod,
 }
 #[pymethods]
@@ -118,8 +118,8 @@ impl PassageTimes {
     ) -> PyResult<Self> {
         let starts = extract_list_array(starts, "starts");
         let ends = extract_list_array(ends, "ends");
-        let passage_times_sum: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
-        let passage_times_counter: nd::Array2<usize> =
+        let sums: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
+        let counters: nd::Array2<usize> =
             nd::Array2::zeros((starts.len(), ends.len()));
         let method = match method.as_str() {
             "all" => PassageTimesMethod::All,
@@ -134,8 +134,8 @@ impl PassageTimes {
             dt,
             starts,
             ends,
-            passage_times_sum,
-            passage_times_counter,
+            sums,
+            counters,
             method,
         })
     }
@@ -149,12 +149,12 @@ impl PassageTimes {
 
     fn __repr__(&self) -> PyResult<String> {
         Ok(format!(
-            "PassageTimes(dt={}, starts={}, ends={}, passage_times_sum={:?}, passage_times_counter={:?})",
+            "PassageTimes(dt={}, starts={}, ends={}, sums={:?}, counters={:?})",
             &self.dt,
             &self.starts,
             &self.ends,
-            &self.passage_times_sum.as_slice().unwrap(),
-            &self.passage_times_counter.as_slice().unwrap()
+            &self.sums.as_slice().unwrap(),
+            &self.counters.as_slice().unwrap()
         ))
     }
 
@@ -205,25 +205,25 @@ impl PassageTimes {
         }
         // add results
         for (sum, counter) in &results {
-            self.passage_times_sum += sum;
-            self.passage_times_counter += counter;
+            self.sums += sum;
+            self.counters += counter;
         }
         Ok(())
     }
 
     #[getter]
-    fn passage_times_sum<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<f64>> {
-        Ok(self.passage_times_sum.to_pyarray(py))
+    fn sums<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<f64>> {
+        Ok(self.sums.to_pyarray(py))
     }
 
     #[getter]
-    fn passage_times_counter<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<usize>> {
-        Ok(self.passage_times_counter.to_pyarray(py))
+    fn counters<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<usize>> {
+        Ok(self.counters.to_pyarray(py))
     }
 
     #[pyo3(text_signature = "($self)")]
     fn get_result<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<f64>> {
-        let result = &self.passage_times_sum / self.passage_times_counter.mapv(|x| x as f64);
+        let result = &self.sums / self.counters.mapv(|x| x as f64);
         Ok(result.into_pyarray(py))
     }
 }
