@@ -1,7 +1,7 @@
 use ndarray as nd;
 use ndarray::parallel::prelude::*;
 use numpy as np;
-use numpy::{IntoPyArray,ToPyArray};
+use numpy::{IntoPyArray, ToPyArray};
 use pyo3 as py;
 use pyo3::prelude::*;
 use rayon;
@@ -119,8 +119,7 @@ impl PassageTimes {
         let starts = extract_list_array(starts, "starts");
         let ends = extract_list_array(ends, "ends");
         let sums: nd::Array2<f64> = nd::Array2::zeros((starts.len(), ends.len()));
-        let counters: nd::Array2<usize> =
-            nd::Array2::zeros((starts.len(), ends.len()));
+        let counters: nd::Array2<usize> = nd::Array2::zeros((starts.len(), ends.len()));
         let method = match method.as_str() {
             "all" => PassageTimesMethod::All,
             "first" => PassageTimesMethod::First,
@@ -172,12 +171,11 @@ impl PassageTimes {
                 "trajs must be c-contiguous",
             ));
         }
-        let mut trajs = unsafe { trajs.as_array_mut() };
+        let trajs = unsafe { trajs.as_array() };
         let mut results = Vec::new();
         if trajs.shape().len() == 1 {
             // compute results in serial if there is only one trajectory
-            let traj =
-                nd::ArrayView1::from_shape(trajs.len(), trajs.as_slice_mut().unwrap()).unwrap();
+            let traj = nd::ArrayView1::from_shape(trajs.len(), trajs.as_slice().unwrap()).unwrap();
             results.push(get_passage_times(
                 traj,
                 &self.starts,
