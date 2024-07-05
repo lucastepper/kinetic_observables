@@ -224,6 +224,15 @@ impl PassageTimes {
         let result = &self.sums / self.counters.mapv(|x| x as f64);
         Ok(result.into_pyarray(py))
     }
+
+    #[pyo3(text_signature = "($self)")]
+    fn get_result_with_bins<'py>(&self, py: Python<'py>) -> PyResult<&'py np::PyArray2<f64>> {
+        let mut result = nd::Array2::zeros((3, self.sums.shape()[1]));
+        let res_temp = &self.sums / self.counters.mapv(|x| x as f64);
+        result.slice_mut(nd::s![0, ..]).assign(&self.ends);
+        result.slice_mut(nd::s![1..3, ..]).assign(&res_temp);
+        Ok(result.into_pyarray(py))
+    }
 }
 
 #[pymodule]
